@@ -1858,9 +1858,6 @@ class AppLocalizationsLt extends AppLocalizations {
   String get openSettings => 'Atidaryti nustatymus';
 
   @override
-  String get wantDifferentName => 'Norite, kad jus vadintų kitaip?';
-
-  @override
   String get whatsYourName => 'Koks tavo vardas?';
 
   @override
@@ -2042,7 +2039,16 @@ class AppLocalizationsLt extends AppLocalizations {
   String get memoryDeleted => 'Prisiminimas ištrintas.';
 
   @override
-  String get memoryHistoryPartial => 'Some memory history is unavailable. Showing the history received so far.';
+  String get memoryHistoryPartial => 'Dalis prisiminimų istorijos nepasiekiama. Rodoma iki šiol gauta istorija.';
+
+  @override
+  String get memoryHistory => 'Istorija';
+
+  @override
+  String get memoryAllowUse => 'Allow use';
+
+  @override
+  String get memoryDontUse => 'Don\'t use';
 
   @override
   String get undo => 'Atšaukti';
@@ -9934,10 +9940,33 @@ class AppLocalizationsLt extends AppLocalizations {
   }
 
   @override
+  String speechProfileOwnerTitle(String name) {
+    return '$name balso profilis';
+  }
+
+  @override
+  String get play => 'Leisti';
+
+  @override
+  String get redo => 'Įrašyti iš naujo';
+
+  @override
+  String get answerWithYourVoice => 'Atsakykite balsu:';
+
+  @override
+  String get speechProfileTopicLocation => 'Kur gyvenate?';
+
+  @override
+  String get speechProfileTopicWork => 'Kokį darbą dirbate?';
+
+  @override
+  String get speechProfileTopicGoal => 'Koks jūsų ilgalaikis tikslas?';
+
+  @override
   String get transcriptionNoAudio => 'Transkripcija negauna garso';
 
   @override
-  String get tapPlusToStartRecording => 'Tap + to start recording';
+  String get tapPlusToStartRecording => 'Norėdami pradėti įrašymą, palieskite +';
 
   @override
   String get chatBlockTask => 'Užduotis';
@@ -9974,4 +10003,15 @@ class AppLocalizationsLt extends AppLocalizations {
 
   @override
   String get couldNotLoadKnowledgeGraph => 'Nepavyko įkelti žinių grafo';
+
+  @override
+  String get speechToTextUnavailableDesc =>
+      'Kalbos vertimas tekstu šiuo metu nepasiekiamas. Patikrinkite interneto ryšį ir įrenginio kalbos atpažinimo nustatymus, tada bandykite dar kartą.';
+
+  @override
+  String get processingTakingLonger => 'Vis dar vyksta — tai užtrunka ilgiau nei įprasta.';
+
+  @override
+  String get speechProfileEnrollmentPrompt =>
+      'Kad Omi žinotų, kuris balsas yra jūsų — kalbėkite apie bet ką maždaug 5 sekundes.';
 }

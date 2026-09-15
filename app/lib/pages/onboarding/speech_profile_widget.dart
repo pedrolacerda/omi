@@ -5,14 +5,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_provider_utilities/flutter_provider_utilities.dart';
 import 'package:provider/provider.dart';
 
+import 'package:omi/backend/http/api/speech_profile.dart';
 import 'package:omi/pages/settings/language_selection_dialog.dart';
-import 'package:omi/pages/speech_profile/percentage_bar_progress.dart';
+import 'package:omi/pages/speech_profile/speech_progress_bar.dart';
 import 'package:omi/providers/capture_provider.dart';
 import 'package:omi/providers/home_provider.dart';
 import 'package:omi/providers/speech_profile_provider.dart';
+import 'package:omi/utils/alerts/app_snackbar.dart';
 import 'package:omi/utils/l10n_extensions.dart';
 import 'package:omi/utils/logger.dart';
 import 'package:omi/widgets/dialog.dart';
+import 'package:omi/widgets/device_widget.dart';
+import 'package:omi/widgets/fade_in_words_text.dart';
 
 class SpeechProfileWidget extends StatefulWidget {
   final VoidCallback goNext;
@@ -24,71 +28,166 @@ class SpeechProfileWidget extends StatefulWidget {
   State<SpeechProfileWidget> createState() => _SpeechProfileWidgetState();
 }
 
-class _SpeechProfileWidgetState extends State<SpeechProfileWidget> with TickerProviderStateMixin {
-  late AnimationController _questionAnimationController;
-  late Animation<double> _questionFadeAnimation;
+class _SpeechProfileWidgetState extends State<SpeechProfileWidget> {
   SpeechProfileProvider? _speechProvider;
+  // Guards the pre-flight availability check itself, which runs before
+  // provider.isInitialising ever becomes true — without this, a rapid double
+  // tap during that network round-trip could start two concurrent sessions.
+  bool _isCheckingAvailability = false;
+
+  /// How long the finished recording (final words, card, full bar) stays on
+  /// screen after the profile is saved before switching to All done.
+  static const Duration allDoneHold = Duration(milliseconds: 1500);
+  bool _allDoneVisible = false;
+  Timer? _allDoneTimer;
+
+  /// Snapshot of the recording view taken the moment recording ends, so every
+  /// part of it (last words, card, bar, mic disclaimer) holds still and later
+  /// fades out together instead of pieces changing on their own.
+  String? _frozenText;
+  bool? _frozenNoDevice;
+  double? _frozenProgress;
+
+  void _syncAllDone(SpeechProfileProvider provider) {
+    final ended = provider.uploadingProfile || provider.profileCompleted;
+    if (ended && _frozenText == null) {
+      _frozenText = provider.text;
+      _frozenNoDevice = provider.device == null;
+      // Recording ends at the target, so the bar stays full until it fades.
+      _frozenProgress = 1.0;
+    } else if (!ended && _frozenText != null) {
+      _frozenText = null;
+      _frozenNoDevice = null;
+      _frozenProgress = null;
+    }
+    if (provider.profileCompleted) {
+      if (_allDoneVisible || _allDoneTimer != null) return;
+      _allDoneTimer = Timer(allDoneHold, () {
+        _allDoneTimer = null;
+        if (mounted) setState(() => _allDoneVisible = true);
+      });
+    } else if (_allDoneVisible || _allDoneTimer != null) {
+      _allDoneTimer?.cancel();
+      _allDoneTimer = null;
+      _allDoneVisible = false;
+    }
+  }
 
   @override
   void initState() {
     super.initState();
-    _questionAnimationController = AnimationController(duration: const Duration(milliseconds: 500), vsync: this);
-    _questionFadeAnimation = Tween<double>(
-      begin: 0.0,
-      end: 1.0,
-    ).animate(CurvedAnimation(parent: _questionAnimationController, curve: Curves.easeInOut));
-
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
-      // Check if user has set primary language
       if (!context.read<HomeProvider>().hasSetPrimaryLanguage) {
         await LanguageSelectionDialog.show(context);
       }
+      if (!mounted) return;
+      // Don't wait for Get Started — that extra tap is where Android users
+      // drop between permissions and any speech-profile skip/complete event.
+      await _startOnboardingRecording();
     });
-    // Onboarding completion is now handled by the completion screen
+  }
+
+  Future<void> _startOnboardingRecording() async {
+    if (!mounted) return;
+    final provider = context.read<SpeechProfileProvider>();
+    if (provider.startedRecording || provider.isInitialising || _isCheckingAvailability) return;
+
+    setState(() => _isCheckingAvailability = true);
+    final available = await isSttAvailable();
+    final useLocalStt = !available && await provider.enableLocalStt();
+    if (mounted) setState(() => _isCheckingAvailability = false);
+    if (!available && !useLocalStt) {
+      if (!mounted) return;
+      await showDialog(
+        context: context,
+        builder: (c) => getDialog(
+          context,
+          () {
+            Navigator.pop(context);
+            widget.onSkip();
+          },
+          () => Navigator.pop(context),
+          context.l10n.connectionError,
+          context.l10n.speechToTextUnavailableDesc,
+          okButtonText: context.l10n.ok,
+          cancelButtonText: context.l10n.skipForNow,
+        ),
+        barrierDismissible: false,
+      );
+      return;
+    }
+
+    if (!mounted) return;
+    await Provider.of<CaptureProvider>(context, listen: false).stopStreamDeviceRecording();
+    final success = await provider.initialise(
+      usePhoneMic: true,
+      isOnboardingFlow: true,
+      processConversationCallback: () {
+        Provider.of<CaptureProvider>(context, listen: false).forceProcessingCurrentConversation();
+      },
+    );
+    if (!success) return;
+    provider.forceCompletionTimer = Timer(
+      Duration(seconds: provider.maxDuration),
+      () async {
+        provider.finalize();
+      },
+    );
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _speechProvider ??= context.read<SpeechProfileProvider>();
+    // This now reads the shared app-root SpeechProfileProvider (see main.dart)
+    // rather than a fresh instance built just for onboarding, so a stale
+    // question/transcript/completed-profile from an earlier Settings-triggered
+    // recording (e.g. a prior account in the same app session) must be reset
+    // before this step is shown, not just on the Settings page's own entry.
+    if (_speechProvider == null) {
+      _speechProvider = context.read<SpeechProfileProvider>();
+      _speechProvider!.close();
+    }
   }
 
   @override
   void dispose() {
     _speechProvider?.forceCompletionTimer?.cancel();
     _speechProvider?.forceCompletionTimer = null;
-
-    _scrollController.dispose();
-    _questionAnimationController.dispose();
+    _allDoneTimer?.cancel();
 
     super.dispose();
   }
 
-  final ScrollController _scrollController = ScrollController();
-
-  void scrollDown() async {
-    if (!_scrollController.hasClients) return;
-    await Future.delayed(const Duration(milliseconds: 250));
-    if (!mounted || !_scrollController.hasClients) return;
-    _scrollController.animateTo(
-      _scrollController.position.maxScrollExtent,
-      duration: const Duration(milliseconds: 200),
-      curve: Curves.easeOut,
-    );
-  }
-
-  String _getLoadingText(BuildContext context, SpeechProfileLoadingState state) {
-    switch (state) {
-      case SpeechProfileLoadingState.uploading:
-        return context.l10n.uploadingVoiceProfile;
-      case SpeechProfileLoadingState.memorizing:
-        return context.l10n.memorizingYourVoice;
-      case SpeechProfileLoadingState.personalizing:
-        return context.l10n.personalizingExperience;
-      case SpeechProfileLoadingState.allSet:
-        return context.l10n.youreAllSet;
-    }
+  /// The last three lines the user said while recording. The 2 s grace before
+  /// finalizing keeps the final sentence visible before the state changes.
+  List<Widget> _transcript(BuildContext context, String text) {
+    if (text.isEmpty) return const [];
+    return [
+      // The widget keeps only the last three whole lines, so the
+      // area is never clipped: at least three lines tall (so the
+      // card below stays put), growing if rendered lines run taller.
+      ConstrainedBox(
+        constraints: BoxConstraints(
+          minHeight: MediaQuery.textScalerOf(context).scale(20) * 1.5 * 3,
+        ),
+        child: Align(
+          alignment: Alignment.bottomCenter,
+          child: FadeInWordsText(
+            text: text,
+            visibleLines: 3,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 20,
+              fontWeight: FontWeight.w400,
+              height: 1.5,
+              fontFamily: 'Manrope',
+            ),
+          ),
+        ),
+      ),
+      const SizedBox(height: 36),
+    ];
   }
 
   @override
@@ -106,15 +205,6 @@ class _SpeechProfileWidgetState extends State<SpeechProfileWidget> with TickerPr
       }
     }
 
-    Future stopAllRecording() async {
-      Logger.debug("stopAllRecording $mounted");
-      if (mounted) {
-        final captureProvider = Provider.of<CaptureProvider>(context, listen: false);
-        // Stop any active device recording
-        await captureProvider.stopStreamDeviceRecording();
-      }
-    }
-
     return PopScope(
       canPop: true,
       onPopInvokedWithResult: (didPop, result) async {
@@ -124,16 +214,14 @@ class _SpeechProfileWidgetState extends State<SpeechProfileWidget> with TickerPr
       },
       child: Consumer2<SpeechProfileProvider, CaptureProvider>(
         builder: (context, provider, _, child) {
+          _syncAllDone(provider);
+          final recordingText = _frozenText ?? provider.text;
+          final showMicDisclaimer = _frozenNoDevice ?? (provider.device == null);
+          final recordingProgress = _frozenProgress ?? provider.recordingProgress;
           return MessageListener<SpeechProfileProvider>(
             showInfo: (info) {
-              if (info == 'SCROLL_DOWN') {
-                scrollDown();
-              } else if (info == 'NEXT_QUESTION') {
-                if (!mounted) return;
-
-                _questionAnimationController
-                  ..reset()
-                  ..forward();
+              if (info == 'SKIP_UNAVAILABLE') {
+                AppSnackbar.showSnackbarError(context.l10n.reconnecting);
               }
             },
             showError: (error) {
@@ -142,12 +230,15 @@ class _SpeechProfileWidgetState extends State<SpeechProfileWidget> with TickerPr
                   context: context,
                   builder: (c) => getDialog(
                     context,
+                    () {
+                      Navigator.pop(context);
+                      widget.onSkip();
+                    },
                     () => Navigator.pop(context),
-                    () {},
                     context.l10n.connectionError,
                     context.l10n.connectionErrorDesc,
                     okButtonText: context.l10n.ok,
-                    singleButton: true,
+                    cancelButtonText: context.l10n.skipForNow,
                   ),
                   barrierDismissible: false,
                 );
@@ -175,13 +266,13 @@ class _SpeechProfileWidgetState extends State<SpeechProfileWidget> with TickerPr
                     context,
                     () {
                       Navigator.pop(context);
-                      //  Navigator.pop(context);
+                      widget.onSkip();
                     },
-                    () {},
-                    context.l10n.invalidRecordingMultipleSpeakers,
+                    () => Navigator.pop(context),
+                    context.l10n.areYouThere,
                     context.l10n.tooShortDesc,
                     okButtonText: context.l10n.ok,
-                    singleButton: true,
+                    cancelButtonText: context.l10n.skipForNow,
                   ),
                   barrierDismissible: false,
                 );
@@ -192,12 +283,13 @@ class _SpeechProfileWidgetState extends State<SpeechProfileWidget> with TickerPr
                     context,
                     () {
                       Navigator.pop(context);
+                      widget.onSkip();
                     },
-                    () {},
+                    () => Navigator.pop(context),
                     context.l10n.connectionError,
                     context.l10n.connectionErrorDesc,
                     okButtonText: context.l10n.ok,
-                    singleButton: true,
+                    cancelButtonText: context.l10n.skipForNow,
                   ),
                   barrierDismissible: false,
                 );
@@ -277,7 +369,45 @@ class _SpeechProfileWidgetState extends State<SpeechProfileWidget> with TickerPr
             },
             child: Column(
               children: [
-                Expanded(child: Container()),
+                Expanded(
+                  child: Align(
+                    alignment: Alignment.bottomCenter,
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: 24),
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          if (provider.startedRecording && !provider.profileCompleted && !provider.uploadingProfile)
+                            // Mic feedback: a plain white glow behind the device graphic
+                            // that grows brighter/larger with mic level, matching the
+                            // Settings speech-profile redo page.
+                            AnimatedContainer(
+                              duration: const Duration(milliseconds: 150),
+                              width: 180 + provider.micLevel * 40,
+                              height: 180 + provider.micLevel * 40,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.white.withValues(alpha: 0.08 + provider.micLevel * 0.18),
+                                    blurRadius: 32 + provider.micLevel * 24,
+                                    spreadRadius: 2 + provider.micLevel * 10,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          DeviceAnimationWidget(
+                            animatedBackground: true,
+                            deviceType: provider.device?.type,
+                            deviceName: provider.device?.name,
+                            modelNumber: provider.device?.modelNumber,
+                            isConnected: provider.device != null,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
                 Container(
                   width: double.infinity,
                   padding: EdgeInsets.fromLTRB(32, 0, 32, MediaQuery.of(context).padding.bottom + 8),
@@ -292,28 +422,29 @@ class _SpeechProfileWidgetState extends State<SpeechProfileWidget> with TickerPr
                       children: [
                         const SizedBox(height: 32),
 
-                        // Title
-                        Text(
-                          provider.startedRecording && !provider.profileCompleted
-                              ? 'Answer with your voice:'
-                              : 'Please find a quiet place',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 28,
-                            fontWeight: FontWeight.bold,
-                            height: 1.2,
-                            fontFamily: 'Manrope',
+                        // Title — hidden once the profile is complete or
+                        // uploading, matching the Settings redo page (which has
+                        // no title in those states, only the All-Done/loading UI).
+                        if (!provider.profileCompleted && !provider.uploadingProfile) ...[
+                          Text(
+                            context.l10n.teachOmiYourVoice,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 28,
+                              fontWeight: FontWeight.bold,
+                              height: 1.2,
+                              fontFamily: 'Manrope',
+                            ),
+                            textAlign: TextAlign.center,
                           ),
-                          textAlign: TextAlign.center,
-                        ),
-
-                        const SizedBox(height: 16),
+                          const SizedBox(height: 16),
+                        ],
 
                         // Content area changes based on state
                         if (!provider.startedRecording) ...[
                           // Intro text
                           Text(
-                            'Omi needs to learn your goals and your voice. Answer questions with your voice. You\'ll be able to modify it later.',
+                            context.l10n.speechProfileEnrollmentPrompt,
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               color: Colors.white.withValues(alpha: 0.6),
@@ -326,45 +457,14 @@ class _SpeechProfileWidgetState extends State<SpeechProfileWidget> with TickerPr
                           const SizedBox(height: 32),
 
                           // Get Started button
-                          provider.isInitialising
+                          (provider.isInitialising || _isCheckingAvailability)
                               ? const CircularProgressIndicator(color: Colors.white)
                               : SizedBox(
                                   width: double.infinity,
                                   height: 56,
                                   child: ElevatedButton(
-                                    onPressed: () async {
-                                      // Check if user has set primary language, if not, show dialog
-                                      if (!context.read<HomeProvider>().hasSetPrimaryLanguage) {
-                                        await LanguageSelectionDialog.show(context);
-                                      }
-
-                                      await stopAllRecording();
-
-                                      // Initialize speech profile with phone mic as input source
-                                      bool success = await provider.initialise(
-                                        usePhoneMic: true,
-                                        processConversationCallback: () {
-                                          Provider.of<CaptureProvider>(
-                                            context,
-                                            listen: false,
-                                          ).forceProcessingCurrentConversation();
-                                        },
-                                      );
-
-                                      if (!success) {
-                                        return;
-                                      }
-
-                                      provider.forceCompletionTimer = Timer(
-                                        Duration(seconds: provider.maxDuration),
-                                        () async {
-                                          provider.finalize();
-                                        },
-                                      );
-
-                                      if (!mounted) return;
-                                      _questionAnimationController.forward();
-                                    },
+                                    key: const Key('speech_profile_start'),
+                                    onPressed: () => _startOnboardingRecording(),
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor: Colors.white,
                                       foregroundColor: Colors.black,
@@ -381,139 +481,120 @@ class _SpeechProfileWidgetState extends State<SpeechProfileWidget> with TickerPr
                                     ),
                                   ),
                                 ),
-                        ] else if (provider.profileCompleted) ...[
-                          // All Done state
-                          const SizedBox(height: 16),
-                          SizedBox(
-                            width: double.infinity,
-                            height: 56,
-                            child: ElevatedButton(
-                              onPressed: () => widget.goNext(),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.white,
-                                foregroundColor: Colors.black,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-                                elevation: 0,
-                              ),
+                          // Only relevant while actually recording with the phone mic —
+                          // matches the Settings speech-profile page's disclaimer.
+                          if (provider.device == null)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 16),
                               child: Text(
-                                context.l10n.allDone,
-                                style: const TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w600,
-                                  fontFamily: 'Manrope',
-                                ),
+                                context.l10n.noDeviceConnectedUseMic,
+                                style: TextStyle(color: Colors.grey.shade400, fontSize: 14),
+                                textAlign: TextAlign.center,
                               ),
                             ),
-                          ),
-                        ] else if (provider.uploadingProfile) ...[
-                          // Uploading state
                           const SizedBox(height: 16),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const SizedBox(
-                                height: 24,
-                                width: 24,
-                                child: Center(
-                                  child: CircularProgressIndicator(
-                                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 16),
-                              Text(
-                                _getLoadingText(context, provider.loadingState),
-                                style: const TextStyle(color: Colors.white, fontSize: 16, fontFamily: 'Manrope'),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 16),
-                        ] else ...[
-                          // Recording state - transcript + question + progress
-                          ShaderMask(
-                            shaderCallback: (bounds) {
-                              if (provider.text.split(' ').length < 10) {
-                                return const LinearGradient(colors: [Colors.white, Colors.white]).createShader(bounds);
-                              }
-                              return const LinearGradient(
-                                colors: [Colors.transparent, Colors.white],
-                                stops: [0.0, 0.5],
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                              ).createShader(bounds);
-                            },
-                            blendMode: BlendMode.dstIn,
-                            child: SizedBox(
-                              height: 80,
-                              child: ListView(
-                                controller: _scrollController,
-                                shrinkWrap: true,
-                                physics: const NeverScrollableScrollPhysics(),
-                                children: [
-                                  Text(
-                                    provider.text,
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(
-                                      color: Colors.white.withValues(alpha: 0.6),
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w400,
-                                      height: 1.5,
-                                      fontFamily: 'Manrope',
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-
-                          const SizedBox(height: 8),
-
-                          // Current question
-                          FadeTransition(
-                            opacity: _questionFadeAnimation,
-                            child: Text(
-                              provider.currentQuestion,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 24,
-                                height: 1.3,
-                                fontFamily: 'Manrope',
-                                fontWeight: FontWeight.w600,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                          ),
-
-                          const SizedBox(height: 12),
-
-                          // Progress bar
-                          SizedBox(
-                            width: double.infinity,
-                            child: ProgressBarWithPercentage(progressValue: provider.questionProgress),
-                          ),
-
-                          const SizedBox(height: 8),
-
-                          Text(
-                            context.l10n.keepGoing,
-                            style: TextStyle(
-                              color: Colors.grey.shade400,
-                              fontSize: 14,
-                              height: 1.3,
-                              fontFamily: 'Manrope',
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-
                           TextButton(
-                            onPressed: () {
-                              provider.close();
-                              widget.onSkip();
-                            },
+                            key: const Key('speech_profile_skip_intro'),
+                            onPressed: widget.onSkip,
+                            style: TextButton.styleFrom(
+                              foregroundColor: Colors.grey.shade400,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+                              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+                            ),
                             child: Text(
                               context.l10n.skipForNow,
-                              style: const TextStyle(color: Colors.grey, fontSize: 14, fontFamily: 'Manrope'),
+                              style: TextStyle(color: Colors.grey.shade400, fontSize: 14, fontFamily: 'Manrope'),
                             ),
+                          ),
+                        ] else ...[
+                          // The finished recording holds still (see _frozenText) and then
+                          // fades out as one block while All done fades in.
+                          AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 450),
+                            switchInCurve: Curves.easeIn,
+                            switchOutCurve: Curves.easeOut,
+                            child: _allDoneVisible
+                                ? Column(
+                                    key: const ValueKey('onboarding-speech-profile-done'),
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      // All Done state (after the hold on the finished recording)
+                                      const SizedBox(height: 16),
+                                      SizedBox(
+                                        width: double.infinity,
+                                        height: 56,
+                                        child: ElevatedButton(
+                                          onPressed: () => widget.goNext(),
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: Colors.white,
+                                            foregroundColor: Colors.black,
+                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+                                            elevation: 0,
+                                          ),
+                                          child: Text(
+                                            context.l10n.allDone,
+                                            style: const TextStyle(
+                                              fontSize: 18,
+                                              fontWeight: FontWeight.w600,
+                                              fontFamily: 'Manrope',
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  )
+                                : Column(
+                                    key: const ValueKey('onboarding-speech-profile-recording'),
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      // Recording state - transcript + instructions + progress
+                                      // Transcript styling matches the Settings speech-profile page
+                                      // exactly (fontSize 20, full-white, taller viewport), hidden
+                                      // entirely until the first words arrive.
+                                      ..._transcript(context, recordingText),
+
+                                      Text(
+                                        context.l10n.speechProfileEnrollmentPrompt,
+                                        textAlign: TextAlign.center,
+                                        style: const TextStyle(color: Colors.white, fontSize: 16, height: 1.5),
+                                      ),
+
+                                      const SizedBox(height: 12),
+
+                                      SpeechProgressBar(progress: recordingProgress),
+
+                                      const SizedBox(height: 12),
+
+                                      if (!provider.uploadingProfile && !provider.profileCompleted)
+                                        TextButton(
+                                          key: const Key('speech_profile_skip_recording'),
+                                          onPressed: () {
+                                            provider.close();
+                                            widget.onSkip();
+                                          },
+                                          style: TextButton.styleFrom(
+                                            foregroundColor: Colors.grey.shade400,
+                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+                                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+                                          ),
+                                          child: Text(
+                                            context.l10n.skipForNow,
+                                            style: TextStyle(
+                                                color: Colors.grey.shade400, fontSize: 14, fontFamily: 'Manrope'),
+                                          ),
+                                        ),
+
+                                      if (showMicDisclaimer)
+                                        Padding(
+                                          padding: const EdgeInsets.only(top: 8),
+                                          child: Text(
+                                            context.l10n.noDeviceConnectedUseMic,
+                                            style: TextStyle(color: Colors.grey.shade400, fontSize: 14),
+                                            textAlign: TextAlign.center,
+                                          ),
+                                        ),
+                                    ],
+                                  ),
                           ),
                         ],
                       ],

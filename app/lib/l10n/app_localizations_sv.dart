@@ -1861,9 +1861,6 @@ class AppLocalizationsSv extends AppLocalizations {
   String get openSettings => 'Öppna inställningar';
 
   @override
-  String get wantDifferentName => 'Vill du kallas något annat?';
-
-  @override
   String get whatsYourName => 'Vad heter du?';
 
   @override
@@ -2044,7 +2041,17 @@ class AppLocalizationsSv extends AppLocalizations {
   String get memoryDeleted => 'Minne borttaget.';
 
   @override
-  String get memoryHistoryPartial => 'Some memory history is unavailable. Showing the history received so far.';
+  String get memoryHistoryPartial =>
+      'En del av minneshistoriken är inte tillgänglig. Visar historiken som har tagits emot hittills.';
+
+  @override
+  String get memoryHistory => 'Historik';
+
+  @override
+  String get memoryAllowUse => 'Allow use';
+
+  @override
+  String get memoryDontUse => 'Don\'t use';
 
   @override
   String get undo => 'Ångra';
@@ -9918,10 +9925,33 @@ class AppLocalizationsSv extends AppLocalizations {
   }
 
   @override
+  String speechProfileOwnerTitle(String name) {
+    return 'Röstprofil för $name';
+  }
+
+  @override
+  String get play => 'Spela upp';
+
+  @override
+  String get redo => 'Spela in igen';
+
+  @override
+  String get answerWithYourVoice => 'Svara med din röst:';
+
+  @override
+  String get speechProfileTopicLocation => 'Var bor du?';
+
+  @override
+  String get speechProfileTopicWork => 'Vad jobbar du med?';
+
+  @override
+  String get speechProfileTopicGoal => 'Vad är ditt långsiktiga mål?';
+
+  @override
   String get transcriptionNoAudio => 'Transkrieringen tar inte emot ljud';
 
   @override
-  String get tapPlusToStartRecording => 'Tap + to start recording';
+  String get tapPlusToStartRecording => 'Tryck på + för att börja spela in';
 
   @override
   String get chatBlockTask => 'Uppgift';
@@ -9958,4 +9988,15 @@ class AppLocalizationsSv extends AppLocalizations {
 
   @override
   String get couldNotLoadKnowledgeGraph => 'Kunde inte läsa in kunskapsgrafen';
+
+  @override
+  String get speechToTextUnavailableDesc =>
+      'Tal till text är inte tillgängligt just nu. Kontrollera internetanslutningen och enhetens inställningar för taligenkänning och försök igen.';
+
+  @override
+  String get processingTakingLonger => 'Fortfarande igång — det tar längre tid än vanligt.';
+
+  @override
+  String get speechProfileEnrollmentPrompt =>
+      'Så att Omi vet vilken röst som är din — prata om vad som helst i ungefär 5 sekunder.';
 }

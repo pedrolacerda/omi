@@ -1849,9 +1849,6 @@ class AppLocalizationsTh extends AppLocalizations {
   String get openSettings => 'เปิดการตั้งค่า';
 
   @override
-  String get wantDifferentName => 'ต้องการใช้ชื่ออื่นไหม?';
-
-  @override
   String get whatsYourName => 'คุณชื่ออะไร?';
 
   @override
@@ -2031,7 +2028,16 @@ class AppLocalizationsTh extends AppLocalizations {
   String get memoryDeleted => 'ลบความทรงจำแล้ว';
 
   @override
-  String get memoryHistoryPartial => 'Some memory history is unavailable. Showing the history received so far.';
+  String get memoryHistoryPartial => 'ประวัติความทรงจำบางส่วนไม่พร้อมใช้งาน กำลังแสดงประวัติที่ได้รับจนถึงตอนนี้';
+
+  @override
+  String get memoryHistory => 'ประวัติ';
+
+  @override
+  String get memoryAllowUse => 'Allow use';
+
+  @override
+  String get memoryDontUse => 'Don\'t use';
 
   @override
   String get undo => 'เลิกทำ';
@@ -9857,10 +9863,33 @@ class AppLocalizationsTh extends AppLocalizations {
   }
 
   @override
+  String speechProfileOwnerTitle(String name) {
+    return 'โปรไฟล์เสียงของ $name';
+  }
+
+  @override
+  String get play => 'เล่น';
+
+  @override
+  String get redo => 'บันทึกใหม่';
+
+  @override
+  String get answerWithYourVoice => 'ตอบด้วยเสียงของคุณ:';
+
+  @override
+  String get speechProfileTopicLocation => 'คุณอาศัยอยู่ที่ไหน?';
+
+  @override
+  String get speechProfileTopicWork => 'คุณทำงานอะไร?';
+
+  @override
+  String get speechProfileTopicGoal => 'เป้าหมายระยะยาวของคุณคืออะไร?';
+
+  @override
   String get transcriptionNoAudio => 'การถอดเสียงไม่ได้รับเสียง';
 
   @override
-  String get tapPlusToStartRecording => 'Tap + to start recording';
+  String get tapPlusToStartRecording => 'แตะ + เพื่อเริ่มบันทึก';
 
   @override
   String get chatBlockTask => 'งาน';
@@ -9897,4 +9926,15 @@ class AppLocalizationsTh extends AppLocalizations {
 
   @override
   String get couldNotLoadKnowledgeGraph => 'ไม่สามารถโหลดกราฟความรู้ได้';
+
+  @override
+  String get speechToTextUnavailableDesc =>
+      'ขณะนี้ไม่สามารถแปลงเสียงเป็นข้อความได้ โปรดตรวจสอบการเชื่อมต่ออินเทอร์เน็ตและการตั้งค่าการรู้จำเสียงของอุปกรณ์ แล้วลองอีกครั้ง';
+
+  @override
+  String get processingTakingLonger => 'ยังทำงานอยู่ — ใช้เวลานานกว่าปกติ';
+
+  @override
+  String get speechProfileEnrollmentPrompt =>
+      'เพื่อให้ Omi รู้ว่าเสียงไหนเป็นของคุณ — พูดเรื่องอะไรก็ได้ประมาณ 5 วินาที';
 }

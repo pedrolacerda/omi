@@ -1872,9 +1872,6 @@ class AppLocalizationsHu extends AppLocalizations {
   String get openSettings => 'Beállítások megnyitása';
 
   @override
-  String get wantDifferentName => 'Máshogy szeretnéd, hogy hívjanak?';
-
-  @override
   String get whatsYourName => 'Mi a neved?';
 
   @override
@@ -2056,7 +2053,17 @@ class AppLocalizationsHu extends AppLocalizations {
   String get memoryDeleted => 'Emlék törölve.';
 
   @override
-  String get memoryHistoryPartial => 'Some memory history is unavailable. Showing the history received so far.';
+  String get memoryHistoryPartial =>
+      'Az emlékek előzményeinek egy része nem érhető el. Az eddig megkapott előzmények láthatók.';
+
+  @override
+  String get memoryHistory => 'Előzmények';
+
+  @override
+  String get memoryAllowUse => 'Allow use';
+
+  @override
+  String get memoryDontUse => 'Don\'t use';
 
   @override
   String get undo => 'Visszavonás';
@@ -9955,10 +9962,33 @@ class AppLocalizationsHu extends AppLocalizations {
   }
 
   @override
+  String speechProfileOwnerTitle(String name) {
+    return '$name hangprofilja';
+  }
+
+  @override
+  String get play => 'Lejátszás';
+
+  @override
+  String get redo => 'Újrafelvétel';
+
+  @override
+  String get answerWithYourVoice => 'Válaszolj szóban:';
+
+  @override
+  String get speechProfileTopicLocation => 'Hol élsz?';
+
+  @override
+  String get speechProfileTopicWork => 'Mivel foglalkozol?';
+
+  @override
+  String get speechProfileTopicGoal => 'Mi a hosszú távú célod?';
+
+  @override
   String get transcriptionNoAudio => 'Az átírás nem kap hangot';
 
   @override
-  String get tapPlusToStartRecording => 'Tap + to start recording';
+  String get tapPlusToStartRecording => 'Koppints a + jelre a felvétel indításához';
 
   @override
   String get chatBlockTask => 'Feladat';
@@ -9995,4 +10025,15 @@ class AppLocalizationsHu extends AppLocalizations {
 
   @override
   String get couldNotLoadKnowledgeGraph => 'Nem sikerült betölteni a tudásgráfot';
+
+  @override
+  String get speechToTextUnavailableDesc =>
+      'A beszéd szöveggé alakítása jelenleg nem érhető el. Ellenőrizd az internetkapcsolatot és az eszköz beszédfelismerési beállításait, majd próbáld újra.';
+
+  @override
+  String get processingTakingLonger => 'Még folyamatban — ez tovább tart a szokásosnál.';
+
+  @override
+  String get speechProfileEnrollmentPrompt =>
+      'Hogy az Omi tudja, melyik hang a tiéd — beszélj bármiről körülbelül 5 másodpercig.';
 }

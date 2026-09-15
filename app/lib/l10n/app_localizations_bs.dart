@@ -1859,9 +1859,6 @@ class AppLocalizationsBs extends AppLocalizations {
   String get openSettings => 'Otvorite postavke';
 
   @override
-  String get wantDifferentName => 'Želite li da se zoveš nečim drugim?';
-
-  @override
   String get whatsYourName => 'Kako se zoveš?';
 
   @override
@@ -2042,7 +2039,16 @@ class AppLocalizationsBs extends AppLocalizations {
   String get memoryDeleted => 'Uspomena je obrisana.';
 
   @override
-  String get memoryHistoryPartial => 'Some memory history is unavailable. Showing the history received so far.';
+  String get memoryHistoryPartial => 'Dio historije sjećanja nije dostupan. Prikazuje se dosad primljena historija.';
+
+  @override
+  String get memoryHistory => 'Historija';
+
+  @override
+  String get memoryAllowUse => 'Allow use';
+
+  @override
+  String get memoryDontUse => 'Don\'t use';
 
   @override
   String get undo => 'Opozovi';
@@ -9943,10 +9949,33 @@ class AppLocalizationsBs extends AppLocalizations {
   }
 
   @override
+  String speechProfileOwnerTitle(String name) {
+    return 'Glasovni profil: $name';
+  }
+
+  @override
+  String get play => 'Pusti';
+
+  @override
+  String get redo => 'Snimi ponovo';
+
+  @override
+  String get answerWithYourVoice => 'Odgovorite glasom:';
+
+  @override
+  String get speechProfileTopicLocation => 'Gdje živite?';
+
+  @override
+  String get speechProfileTopicWork => 'Čime se bavite?';
+
+  @override
+  String get speechProfileTopicGoal => 'Koji je vaš dugoročni cilj?';
+
+  @override
   String get transcriptionNoAudio => 'Transkripcija ne prima audio';
 
   @override
-  String get tapPlusToStartRecording => 'Tap + to start recording';
+  String get tapPlusToStartRecording => 'Dodirnite + za početak snimanja';
 
   @override
   String get chatBlockTask => 'Zadatak';
@@ -9983,4 +10012,14 @@ class AppLocalizationsBs extends AppLocalizations {
 
   @override
   String get couldNotLoadKnowledgeGraph => 'Nije moguće učitati graf znanja';
+
+  @override
+  String get speechToTextUnavailableDesc =>
+      'Pretvaranje govora u tekst trenutno nije dostupno. Provjerite internetsku vezu i postavke prepoznavanja govora na uređaju, pa pokušajte ponovo.';
+
+  @override
+  String get processingTakingLonger => 'Još traje — ovo traje duže nego inače.';
+
+  @override
+  String get speechProfileEnrollmentPrompt => 'Da Omi zna koji je glas vaš — pričajte o bilo čemu oko 5 sekundi.';
 }

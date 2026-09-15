@@ -3281,5 +3281,21 @@
     "chatBlockUnavailable": "Już niedostępne",
     "chatBlockRecommendedNextSteps": "Zalecane kolejne kroki",
     "couldNotLoadMemories": "Nie udało się wczytać wspomnień",
-    "couldNotLoadKnowledgeGraph": "Nie udało się wczytać grafu wiedzy"
+    "couldNotLoadKnowledgeGraph": "Nie udało się wczytać grafu wiedzy",
+    "speechProfileOwnerTitle": "Profil głosowy: {name}",
+    "play": "Odtwórz",
+    "redo": "Nagraj ponownie",
+    "answerWithYourVoice": "Odpowiedz głosem:",
+    "speechProfileTopicLocation": "Gdzie mieszkasz?",
+    "speechProfileTopicWork": "Czym się zajmujesz zawodowo?",
+    "speechProfileTopicGoal": "Jaki jest twój długoterminowy cel?",
+    "speechToTextUnavailableDesc": "Zamiana mowy na tekst jest teraz niedostępna. Sprawdź połączenie internetowe i ustawienia rozpoznawania mowy na urządzeniu, a następnie spróbuj ponownie.",
+    "memoryHistoryPartial": "Część historii wspomnień jest niedostępna. Wyświetlana jest dotychczas otrzymana historia.",
+    "memoryHistory": "Historia",
+    "@memoryHistory": {
+        "description": "Filter option for retained memory history"
+    },
+    "tapPlusToStartRecording": "Dotknij +, aby rozpocząć nagrywanie",
+    "processingTakingLonger": "Nadal działa — trwa to dłużej niż zwykle.",
+    "speechProfileEnrollmentPrompt": "Aby Omi wiedziało, który głos jest Twój — mów o czymkolwiek przez około 5 sekund."
 }

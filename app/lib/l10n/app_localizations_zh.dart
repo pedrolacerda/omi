@@ -1823,9 +1823,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get openSettings => '打开设置';
 
   @override
-  String get wantDifferentName => '想用不同的名字？';
-
-  @override
   String get whatsYourName => '您叫什么名字？';
 
   @override
@@ -2000,7 +1997,16 @@ class AppLocalizationsZh extends AppLocalizations {
   String get memoryDeleted => '记忆已删除。';
 
   @override
-  String get memoryHistoryPartial => 'Some memory history is unavailable. Showing the history received so far.';
+  String get memoryHistoryPartial => '部分记忆历史暂不可用。正在显示目前已获取的历史记录。';
+
+  @override
+  String get memoryHistory => '历史';
+
+  @override
+  String get memoryAllowUse => 'Allow use';
+
+  @override
+  String get memoryDontUse => 'Don\'t use';
 
   @override
   String get undo => '撤销';
@@ -9726,10 +9732,33 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String speechProfileOwnerTitle(String name) {
+    return '$name的语音档案';
+  }
+
+  @override
+  String get play => '播放';
+
+  @override
+  String get redo => '重新录制';
+
+  @override
+  String get answerWithYourVoice => '请用语音回答：';
+
+  @override
+  String get speechProfileTopicLocation => '你住在哪里？';
+
+  @override
+  String get speechProfileTopicWork => '你从事什么工作？';
+
+  @override
+  String get speechProfileTopicGoal => '你的长期目标是什么？';
+
+  @override
   String get transcriptionNoAudio => '转录未接收到音频';
 
   @override
-  String get tapPlusToStartRecording => 'Tap + to start recording';
+  String get tapPlusToStartRecording => '点击 + 开始录音';
 
   @override
   String get chatBlockTask => '任务';
@@ -9766,4 +9795,13 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get couldNotLoadKnowledgeGraph => '无法加载知识图谱';
+
+  @override
+  String get speechToTextUnavailableDesc => '目前无法将语音转换为文字。请检查网络连接和设备的语音识别设置，然后重试。';
+
+  @override
+  String get processingTakingLonger => '仍在处理中——比平时耗时更长。';
+
+  @override
+  String get speechProfileEnrollmentPrompt => '让 Omi 知道哪个声音是你的——随便聊点什么，说大约 5 秒就好。';
 }

@@ -17,6 +17,7 @@ dependencies:
   provider: ^6.1.2
   connectivity_plus: ^6.0.3
   flutter_provider_utilities: ^1.0.6
+  clock: ^1.1.1
 
   # Localizations
   flutter_localizations:
@@ -32,7 +33,6 @@ dependencies:
   shimmer: ^3.0.0
   pull_down_button: ^0.10.2
 
-  flutter_map: ^7.0.2
   latlong2: ^0.9.1
 
   # Firebase

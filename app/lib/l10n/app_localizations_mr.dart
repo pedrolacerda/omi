@@ -1860,9 +1860,6 @@ class AppLocalizationsMr extends AppLocalizations {
   String get openSettings => 'सेटिंग्ज खोला';
 
   @override
-  String get wantDifferentName => 'अन्य काहीतरी नावाने जाऊ इच्छिता?';
-
-  @override
   String get whatsYourName => 'आपले नाव काय आहे?';
 
   @override
@@ -2042,7 +2039,17 @@ class AppLocalizationsMr extends AppLocalizations {
   String get memoryDeleted => 'स्मृती हटवली गेली.';
 
   @override
-  String get memoryHistoryPartial => 'Some memory history is unavailable. Showing the history received so far.';
+  String get memoryHistoryPartial =>
+      'आठवणींच्या इतिहासाचा काही भाग उपलब्ध नाही. आतापर्यंत मिळालेला इतिहास दाखवला जात आहे.';
+
+  @override
+  String get memoryHistory => 'इतिहास';
+
+  @override
+  String get memoryAllowUse => 'Allow use';
+
+  @override
+  String get memoryDontUse => 'Don\'t use';
 
   @override
   String get undo => 'पूर्ववत् करा';
@@ -9923,10 +9930,33 @@ class AppLocalizationsMr extends AppLocalizations {
   }
 
   @override
+  String speechProfileOwnerTitle(String name) {
+    return '$name यांची व्हॉइस प्रोफाइल';
+  }
+
+  @override
+  String get play => 'प्ले करा';
+
+  @override
+  String get redo => 'पुन्हा रेकॉर्ड करा';
+
+  @override
+  String get answerWithYourVoice => 'बोलून उत्तर द्या:';
+
+  @override
+  String get speechProfileTopicLocation => 'तुम्ही कुठे राहता?';
+
+  @override
+  String get speechProfileTopicWork => 'तुम्ही काय काम करता?';
+
+  @override
+  String get speechProfileTopicGoal => 'तुमचे दीर्घकालीन ध्येय काय आहे?';
+
+  @override
   String get transcriptionNoAudio => 'ट्रान्सक्रिप्शन ऑडिओ घेत नाही';
 
   @override
-  String get tapPlusToStartRecording => 'Tap + to start recording';
+  String get tapPlusToStartRecording => 'रेकॉर्डिंग सुरू करण्यासाठी + टॅप करा';
 
   @override
   String get chatBlockTask => 'कार्य';
@@ -9963,4 +9993,15 @@ class AppLocalizationsMr extends AppLocalizations {
 
   @override
   String get couldNotLoadKnowledgeGraph => 'ज्ञान आलेख लोड करता आला नाही';
+
+  @override
+  String get speechToTextUnavailableDesc =>
+      'सध्या बोलण्याचे मजकुरात रूपांतर उपलब्ध नाही. तुमचे इंटरनेट कनेक्शन आणि डिव्हाइसवरील वाणी ओळख सेटिंग्ज तपासा, नंतर पुन्हा प्रयत्न करा.';
+
+  @override
+  String get processingTakingLonger => 'अजूनही काम सुरू आहे — याला नेहमीपेक्षा जास्त वेळ लागत आहे.';
+
+  @override
+  String get speechProfileEnrollmentPrompt =>
+      'Omi ला तुमचा आवाज ओळखता यावा म्हणून — कोणत्याही विषयावर सुमारे 5 सेकंद बोला.';
 }

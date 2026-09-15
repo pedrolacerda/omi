@@ -132,7 +132,10 @@ final class ChatTranscriptGestureHarnessTests: XCTestCase {
 
   /// The jitter complaint, as a gate: while a stream is live and the reader is
   /// following, the pinner tracks the live edge every tick, so between-flush
-  /// drift stays within one flush's own growth (a line or two). The periodic
+  /// drift stays within one flush's own growth. At the default 14 pt chat body
+  /// the measured line height is 22.5 pt (17.5 pt glyph height + 5 pt leading),
+  /// so the bound allows one layout line while still catching the old multi-line
+  /// glide drift. The periodic
   /// glide this replaced drifted tens of points between follows — its worst
   /// was 48 pt here — which read as up-and-down stutter.
   func testStreamingPinsTheViewportToTheLiveEdgeEveryTick() throws {
@@ -148,8 +151,16 @@ final class ChatTranscriptGestureHarnessTests: XCTestCase {
       worstDrift = max(worstDrift, harness.maximumScrollTop - harness.scrollTop)
     }
 
+    let defaultChatFontSize: CGFloat = 14
+    let oneLineHeight =
+      defaultChatFontSize * 1.25
+      + OmiMarkdownContent.chatLineSpacing(fontSize: defaultChatFontSize)
     XCTAssertLessThan(
-      worstDrift, 20,
+      oneLineHeight + 1.5,
+      48,
+      "the one-line bound must still reject the measured pre-fix 48 pt multi-line glide")
+    XCTAssertLessThan(
+      worstDrift, oneLineHeight + 1.5,
       "a streaming transcript must pin the following viewport to the live edge per tick "
         + "(drifted \(worstDrift) pt of a \(harness.viewportHeight) pt viewport)")
   }
@@ -560,13 +571,15 @@ final class ChatTranscriptGestureHarnessTests: XCTestCase {
       messageCount: Int,
       startsLoading: Bool = false,
       pendingMessageCount: Int = 0,
-      transcriptWindowPolicy: ChatTranscriptWindow.Policy? = nil
+      transcriptWindowPolicy: ChatTranscriptWindow.Policy? = nil,
+      pinReduceMotion: Bool? = nil
     ) throws {
       model = TranscriptModel(messages: Self.makeMessages(count: messageCount))
       model.isLoadingInitial = startsLoading
       model.transcriptWindowPolicy = transcriptWindowPolicy
       self.pendingMessages = Self.makeMessages(count: pendingMessageCount)
-      hostingView = NSHostingView(rootView: HarnessChatHost(model: model))
+      hostingView = NSHostingView(
+        rootView: HarnessChatHost(model: model, pinReduceMotion: pinReduceMotion))
       hostingView.frame = NSRect(x: 0, y: 0, width: 900, height: 600)
       window = NSWindow(
         contentRect: NSRect(x: 0, y: 0, width: 900, height: 600),
@@ -815,6 +828,17 @@ final class ChatTranscriptGestureHarnessTests: XCTestCase {
       model.messages[model.messages.count - 1].isStreaming = true
     }
 
+    /// An empty assistant row that is still streaming, for a test that wants
+    /// to stream an answer into a fresh row rather than onto a settled one.
+    func beginStreamingAssistantMessage() {
+      model.messages.append(
+        ChatMessage(
+          id: "assistant-streaming-\(model.messages.count)",
+          text: "",
+          sender: .ai,
+          isStreaming: true))
+    }
+
     func appendAssistantMessage() {
       model.messages.append(
         ChatMessage(
@@ -975,8 +999,19 @@ final class TranscriptModel: ObservableObject {
 
 struct HarnessChatHost: View {
   @ObservedObject var model: TranscriptModel
+  /// Pins the accessibility Reduce Motion environment when set. A test that
+  /// asserts on *animated* output must not inherit the host machine's
+  /// accessibility settings — a CI host with Reduce Motion on would otherwise
+  /// silently take every static branch and fail the assertion for an
+  /// environment reason the code under test never chose.
+  var pinReduceMotion: Bool? = nil
 
   var body: some View {
+    host
+      .modifier(PinnedReduceMotion(pin: pinReduceMotion))
+  }
+
+  @ViewBuilder private var host: some View {
     ZStack {
       if model.isPresented {
         ChatMessagesView(
@@ -998,6 +1033,31 @@ struct HarnessChatHost: View {
       }
     }
     .frame(width: 900, height: 600)
+  }
+}
+
+/// Applies the pinned Reduce Motion value below the host, leaving the subtree
+/// exactly as the system provided it when no pin was asked for.
+struct PinnedReduceMotion: ViewModifier {
+  let pin: Bool?
+
+  func body(content: Content) -> some View {
+    if let pin {
+      content.pinnedReduceMotion(pin)
+    } else {
+      content
+    }
+  }
+}
+
+extension View {
+  /// One environment write that compiles identically on every toolchain this
+  /// package builds with: the public `\.accessibilityReduceMotion` key path is
+  /// read-only in both the Xcode 16 and macOS 26 SDKs, so the underscored
+  /// `WritableKeyPath` twin is the only setter. It targets the same environment
+  /// entry and propagates to readers of the public key path.
+  func pinnedReduceMotion(_ pin: Bool) -> some View {
+    environment(\._accessibilityReduceMotion, pin)
   }
 }
 

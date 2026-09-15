@@ -1870,9 +1870,6 @@ class AppLocalizationsTl extends AppLocalizations {
   String get openSettings => 'Buksan ang Settings';
 
   @override
-  String get wantDifferentName => 'Gusto mo bang gamitin ang ibang pangalan?';
-
-  @override
   String get whatsYourName => 'Ano ang iyong pangalan?';
 
   @override
@@ -2054,7 +2051,17 @@ class AppLocalizationsTl extends AppLocalizations {
   String get memoryDeleted => 'Ang Alaala ay Natanggal.';
 
   @override
-  String get memoryHistoryPartial => 'Some memory history is unavailable. Showing the history received so far.';
+  String get memoryHistoryPartial =>
+      'Hindi available ang ilang bahagi ng kasaysayan ng mga alaala. Ipinapakita ang kasaysayang natanggap sa ngayon.';
+
+  @override
+  String get memoryHistory => 'Kasaysayan';
+
+  @override
+  String get memoryAllowUse => 'Allow use';
+
+  @override
+  String get memoryDontUse => 'Don\'t use';
 
   @override
   String get undo => 'Undo';
@@ -10005,10 +10012,33 @@ class AppLocalizationsTl extends AppLocalizations {
   }
 
   @override
+  String speechProfileOwnerTitle(String name) {
+    return 'Profile ng Boses ni $name';
+  }
+
+  @override
+  String get play => 'I-play';
+
+  @override
+  String get redo => 'I-record muli';
+
+  @override
+  String get answerWithYourVoice => 'Sumagot gamit ang iyong boses:';
+
+  @override
+  String get speechProfileTopicLocation => 'Saan ka nakatira?';
+
+  @override
+  String get speechProfileTopicWork => 'Ano ang trabaho mo?';
+
+  @override
+  String get speechProfileTopicGoal => 'Ano ang pangmatagalan mong layunin?';
+
+  @override
   String get transcriptionNoAudio => 'Hindi tumatanggap ng audio ang transkripsyon';
 
   @override
-  String get tapPlusToStartRecording => 'Tap + to start recording';
+  String get tapPlusToStartRecording => 'I-tap ang + para magsimulang mag-record';
 
   @override
   String get chatBlockTask => 'Gawain';
@@ -10045,4 +10075,15 @@ class AppLocalizationsTl extends AppLocalizations {
 
   @override
   String get couldNotLoadKnowledgeGraph => 'Hindi ma-load ang knowledge graph';
+
+  @override
+  String get speechToTextUnavailableDesc =>
+      'Hindi available ang pag-convert ng boses sa teksto sa ngayon. Suriin ang iyong koneksyon sa internet at ang mga setting ng pagkilala sa boses ng iyong device, pagkatapos ay subukan muli.';
+
+  @override
+  String get processingTakingLonger => 'Ginagawa pa — mas matagal ito kaysa karaniwan.';
+
+  @override
+  String get speechProfileEnrollmentPrompt =>
+      'Para malaman ng Omi kung alin ang boses mo — magsalita tungkol sa kahit ano nang mga 5 segundo.';
 }

@@ -15,10 +15,46 @@ import 'package:omi/services/wals.dart';
 import 'package:omi/widgets/omi_confirm_dialog.dart';
 import 'package:omi/utils/l10n_extensions.dart';
 import 'package:omi/utils/other/temp.dart';
+import 'package:omi/utils/sync/sync_card_progress_line.dart';
 import 'package:omi/utils/sync_confirmation.dart';
 import 'synced_conversations_page.dart';
 import 'wal_item_detail/wal_item_detail_page.dart';
 import 'package:omi/pages/conversations/widgets/status_action_pill.dart';
+
+/// The Manage Storage clear actions, each paired with the storage re-read.
+///
+/// The storage card renders the ring status this page read when it opened, so a
+/// clear performed while the page stayed open left the card showing the
+/// pre-clear numbers — the device still reported as full after its recordings
+/// were gone. Pairing happens here, in one place, rather than in each handler:
+/// the original defect was three independent handlers that each had to remember
+/// the re-read, and none of which did.
+///
+/// The re-read has to follow the clear; taken first it would return exactly the
+/// stale numbers being corrected. It also runs when the clear throws, because a
+/// clear that failed part-way still deleted files and leaves the card just as
+/// wrong; the failure itself still propagates to the caller.
+({Future<void> Function() synced, Future<void> Function() pending, Future<void> Function() all})
+    buildStorageClearActions({
+  required Future<void> Function() clearSynced,
+  required Future<void> Function() clearPending,
+  required Future<void> Function() clearAll,
+  required Future<void> Function() refreshDeviceStorage,
+}) {
+  Future<void> thenRefresh(Future<void> Function() clear) async {
+    try {
+      await clear();
+    } finally {
+      await refreshDeviceStorage();
+    }
+  }
+
+  return (
+    synced: () => thenRefresh(clearSynced),
+    pending: () => thenRefresh(clearPending),
+    all: () => thenRefresh(clearAll),
+  );
+}
 
 class AutoSyncPage extends StatefulWidget {
   const AutoSyncPage({super.key});
@@ -156,9 +192,12 @@ class _AutoSyncPageState extends State<AutoSyncPage> {
       switch (s.phase) {
         case SyncPhase.downloadingFromDevice:
           title = l.syncCardDownloadingTitle;
-          final cur = s.currentFile ?? 0;
-          final tot = s.totalFiles ?? 0;
-          if (tot > 0) progressText = l.syncCardProgressOf(cur, tot);
+          progressText = SyncCardProgressLine.subtitle(
+            phase: s.phase,
+            currentFile: s.currentFile,
+            totalFiles: s.totalFiles,
+            counterLabel: (processed, total) => l.syncCardProgressOf(processed, total),
+          );
           break;
         case SyncPhase.waitingForInternet:
           title = l.syncCardWaitingInternet;
@@ -166,9 +205,12 @@ class _AutoSyncPageState extends State<AutoSyncPage> {
           break;
         case SyncPhase.uploadingToCloud:
           title = l.syncCardUploadingTitle;
-          final cur = s.currentFile ?? 0;
-          final tot = s.totalFiles ?? 0;
-          if (tot > 0) progressText = l.syncCardProgressOf(cur, tot);
+          progressText = SyncCardProgressLine.subtitle(
+            phase: s.phase,
+            currentFile: s.currentFile,
+            totalFiles: s.totalFiles,
+            counterLabel: (processed, total) => l.syncCardProgressOf(processed, total),
+          );
           break;
         case SyncPhase.processingOnServer:
           title = l.syncCardProcessing;
@@ -183,9 +225,13 @@ class _AutoSyncPageState extends State<AutoSyncPage> {
     } else if (uploaded > 0) {
       // Uploads finished, reconciler is resolving jobs in the background.
       title = l.syncCardProcessing;
-      // Uploaded WAL counts are queue state, not server segment progress. A
-      // localized background hint avoids presenting them as a completion meter.
-      progressText = l.syncProcessingBackgroundHint;
+      final counts = p.offlineServerProcessingCounts;
+      progressText = SyncCardProgressLine.serverProcessingSubtitle(
+            processed: counts.processed,
+            total: counts.total,
+            counterLabel: (processed, total) => l.processingProgress(processed, total),
+          ) ??
+          l.syncProcessingBackgroundHint;
     } else if (attention > 0) {
       title = l.syncCardNeedsAttention(attention);
       titleColor = Colors.orangeAccent;
@@ -758,6 +804,15 @@ class _AutoSyncPageState extends State<AutoSyncPage> {
   // ─────────────────────────────────────────
 
   void _showManageStorageSheet(BuildContext context, SyncProvider provider) {
+    // Built before the sheet's async callbacks run, so the clear handlers do not
+    // reach through a BuildContext across an await — and so every action is
+    // paired with the storage re-read at a single construction site.
+    final clearActions = buildStorageClearActions(
+      clearSynced: provider.deleteAllSyncedWals,
+      clearPending: provider.deleteAllPendingWals,
+      clearAll: provider.deleteAllClearableWals,
+      refreshDeviceStorage: context.read<DeviceProvider>().refreshRingStorageStatus,
+    );
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -773,7 +828,7 @@ class _AutoSyncPageState extends State<AutoSyncPage> {
             confirmColor: Colors.red,
           );
           if (confirmed == true && context.mounted) {
-            await provider.deleteAllSyncedWals();
+            await clearActions.synced();
             if (context.mounted) {
               ScaffoldMessenger.of(
                 context,
@@ -791,7 +846,7 @@ class _AutoSyncPageState extends State<AutoSyncPage> {
             confirmColor: Colors.red,
           );
           if (confirmed == true && context.mounted) {
-            await provider.deleteAllPendingWals();
+            await clearActions.pending();
             if (context.mounted) {
               ScaffoldMessenger.of(
                 context,
@@ -809,7 +864,7 @@ class _AutoSyncPageState extends State<AutoSyncPage> {
             confirmColor: Colors.red,
           );
           if (confirmed == true && context.mounted) {
-            await provider.deleteAllClearableWals();
+            await clearActions.all();
             if (context.mounted) {
               ScaffoldMessenger.of(
                 context,

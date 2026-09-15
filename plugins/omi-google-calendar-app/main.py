@@ -7,7 +7,7 @@ and chat tools for managing calendar events.
 import os
 import sys
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, List
 from urllib.parse import urlencode
 
@@ -117,7 +117,7 @@ def refresh_access_token(refresh_token: str) -> Optional[dict]:
         if response.status_code == 200:
             return response.json()
         else:
-            log(f"Token refresh failed: {response.status_code} - {response.text}")
+            log(f"Token refresh failed: {response.status_code}")
             return None
     except Exception as e:
         log(f"Error refreshing token: {e}")
@@ -155,8 +155,8 @@ def calendar_api_request(uid: str, method: str, endpoint: str, params: dict = No
                 return {"success": True}
             return response.json()
         else:
-            log(f"Calendar API error: {response.status_code} - {response.text}")
-            return {"error": response.text, "status_code": response.status_code}
+            log(f"Calendar API error: {response.status_code}")
+            return {"error": f"HTTP {response.status_code}", "status_code": response.status_code}
 
     except Exception as e:
         log(f"Calendar API request error: {e}")
@@ -212,6 +212,11 @@ def parse_datetime(dt_str: str) -> tuple[datetime, bool]:
             # If no year in format, use current year
             if "%Y" not in fmt:
                 parsed = parsed.replace(year=today.year)
+            # Normalize any explicit offset to UTC wall time before callers
+            # attach timeZone: UTC.
+            if parsed.tzinfo is not None:
+                parsed = parsed.astimezone(timezone.utc)
+                parsed = parsed.replace(tzinfo=None)
             # If no time in format, it's an all-day event
             is_all_day = "%H" not in fmt and "%I" not in fmt
             return parsed, is_all_day
@@ -221,8 +226,12 @@ def parse_datetime(dt_str: str) -> tuple[datetime, bool]:
     # Default: try to parse as ISO format
     try:
         parsed = datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
+        if parsed.tzinfo is not None:
+            # Convert the instant to UTC wall time before dropping tzinfo so
+            # callers that attach timeZone: UTC do not shift the event.
+            parsed = parsed.astimezone(timezone.utc)
         return parsed.replace(tzinfo=None), False
-    except:
+    except Exception:
         pass
 
     raise ValueError(f"Could not parse datetime: {dt_str}")
@@ -1088,8 +1097,8 @@ async def google_callback(
         )
 
         if response.status_code != 200:
-            log(f"Token exchange failed: {response.text}")
-            return HTMLResponse(content=f"Token exchange failed: {response.text}", status_code=400)
+            log(f"Token exchange failed: {response.status_code}")
+            return HTMLResponse(content=f"Token exchange failed: {response.status_code}", status_code=400)
 
         token_data = response.json()
         access_token = token_data.get("access_token")

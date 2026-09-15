@@ -1858,9 +1858,6 @@ class AppLocalizationsNo extends AppLocalizations {
   String get openSettings => 'Åpne innstillinger';
 
   @override
-  String get wantDifferentName => 'Vil du bli kalt noe annet?';
-
-  @override
   String get whatsYourName => 'Hva heter du?';
 
   @override
@@ -2040,7 +2037,17 @@ class AppLocalizationsNo extends AppLocalizations {
   String get memoryDeleted => 'Minne slettet.';
 
   @override
-  String get memoryHistoryPartial => 'Some memory history is unavailable. Showing the history received so far.';
+  String get memoryHistoryPartial =>
+      'Deler av minnehistorikken er ikke tilgjengelig. Viser historikken som er mottatt så langt.';
+
+  @override
+  String get memoryHistory => 'Historikk';
+
+  @override
+  String get memoryAllowUse => 'Allow use';
+
+  @override
+  String get memoryDontUse => 'Don\'t use';
 
   @override
   String get undo => 'Angre';
@@ -9912,10 +9919,33 @@ class AppLocalizationsNo extends AppLocalizations {
   }
 
   @override
+  String speechProfileOwnerTitle(String name) {
+    return 'Stemmeprofil for $name';
+  }
+
+  @override
+  String get play => 'Spill av';
+
+  @override
+  String get redo => 'Ta opp på nytt';
+
+  @override
+  String get answerWithYourVoice => 'Svar med stemmen din:';
+
+  @override
+  String get speechProfileTopicLocation => 'Hvor bor du?';
+
+  @override
+  String get speechProfileTopicWork => 'Hva jobber du med?';
+
+  @override
+  String get speechProfileTopicGoal => 'Hva er ditt langsiktige mål?';
+
+  @override
   String get transcriptionNoAudio => 'Transkripsjon mottar ikke lyd';
 
   @override
-  String get tapPlusToStartRecording => 'Tap + to start recording';
+  String get tapPlusToStartRecording => 'Trykk på + for å starte opptaket';
 
   @override
   String get chatBlockTask => 'Oppgave';
@@ -9952,4 +9982,15 @@ class AppLocalizationsNo extends AppLocalizations {
 
   @override
   String get couldNotLoadKnowledgeGraph => 'Kunne ikke laste kunnskapsgrafen';
+
+  @override
+  String get speechToTextUnavailableDesc =>
+      'Tale til tekst er ikke tilgjengelig akkurat nå. Kontroller internettforbindelsen og enhetens innstillinger for talegjenkjenning, og prøv igjen.';
+
+  @override
+  String get processingTakingLonger => 'Jobber fortsatt — dette tar lengre tid enn vanlig.';
+
+  @override
+  String get speechProfileEnrollmentPrompt =>
+      'Så Omi vet hvilken stemme som er din — snakk om hva som helst i omtrent 5 sekunder.';
 }

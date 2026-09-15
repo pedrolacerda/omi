@@ -236,7 +236,7 @@ struct OMIApp: App {
   }
 }
 
-class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, @unchecked Sendable {
+class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenuItemValidation, @unchecked Sendable {
   /// The live AppDelegate instance. SwiftUI's `@NSApplicationDelegateAdaptor` does
   /// NOT make `NSApp.delegate` our `AppDelegate` — on macOS 14+ it installs an
   /// internal forwarding delegate, so `NSApp.delegate as? AppDelegate` is `nil`.
@@ -297,6 +297,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, @unchecked S
     // background-service startup so the probe has no product side effects.
     if AuthStorageCanary.runIfRequested() { return }
     if UserNotificationCallbackBridge.runSignedSmokeIfRequested() { return }
+    // A keystroke nothing handled must not fall off the end of a responder chain, where AppKit
+    // answers it with the alert sound. See `UnhandledKeystrokeSink`.
+    UnhandledKeystrokeSink.installEverywhere()
     // Running from the mounted DMG / a translocated mount breaks TCC permissions
     // and Sparkle updates — install to /Applications and relaunch before any
     // services start. Returns true when this process is being replaced.
@@ -538,7 +541,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, @unchecked S
     Task { await JITTriggerFeedbackClient.shared.installLifecycleRetry() }
 
     Task { await ContextWorkstreamReconciler.shared.start() }
-    Task { await ContextBucketSyncScheduler.shared.start() }
 
     scheduleAppLifecycleMaintenance()
 
@@ -987,6 +989,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, @unchecked S
     openItem.target = self
     menu.addItem(openItem)
 
+    let undoDictationItem = NSMenuItem(
+      title: "Undo Last Dictation", action: #selector(undoLastDictationFromMenu), keyEquivalent: "")
+    undoDictationItem.target = self
+    menu.addItem(undoDictationItem)
+
     menu.addItem(NSMenuItem.separator())
 
     // Check for Updates
@@ -1103,11 +1110,17 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, @unchecked S
     openMainAppWindow()
   }
 
-  /// Land on the chat with `draft` already in the composer, focused, and not
-  /// sent. The only "ask this" entry that leaves the send to the user; every
-  /// other prefill path auto-sends.
-  @MainActor func openMainAppChat(prefilledDraft draft: String) {
-    MainChatNavigationRequestStore.shared.request(draft: draft)
+  /// Land on the chat with `draft` in the composer, focused and unsent — the
+  /// only "ask this" entry that leaves the send to the user. `attachedFrame`
+  /// stages the first-real-app card's screen referent alongside the draft.
+  @MainActor func openMainAppChat(prefilledDraft draft: String, attachedFrame: ChatAttachment? = nil) {
+    MainChatNavigationRequestStore.shared.request(draft: draft, attachment: attachedFrame)
+    openMainAppWindow()
+  }
+
+  /// Merge an offline question only once the actual composer has restored its draft.
+  @MainActor func openMainAppChat(appendingDraft draft: String, authorization: RuntimeOwnerAuthorizationSnapshot) {
+    MainChatNavigationRequestStore.shared.request(draft: draft, disposition: .append, authorization: authorization)
     openMainAppWindow()
   }
 
@@ -1120,6 +1133,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, @unchecked S
     DesktopAutomationWindowPresentation.revealForUser()
     // Capture this BEFORE any activate call mutates AppKit's notion of frontmost.
     let alreadyFrontmost = NSWorkspace.shared.frontmostApplication == NSRunningApplication.current
+    // The screen still shows the app the user is leaving; pin it now — once
+    // Omi is front, the periodic capture skips Omi and nothing fresher exists.
+    if !alreadyFrontmost {
+      RewindFrameLoader.shared.recordSummonBoundary()
+    }
     NSApp.activate(ignoringOtherApps: true)
     var foundWindow = revealMainWindowIfAvailable()
     if !foundWindow {
@@ -1278,6 +1296,17 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, @unchecked S
     sender.state = outcome.resultingIsOn ? .on : .off
   }
 
+  @MainActor @objc private func undoLastDictationFromMenu() {
+    PushToTalkManager.shared.undoLastDictationAfterMenuTracking()
+  }
+
+  @MainActor func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+    if menuItem.action == #selector(undoLastDictationFromMenu) {
+      return PushToTalkManager.shared.canUndoLastDictation
+    }
+    return true
+  }
+
   // MARK: - NSMenuDelegate
   func menuWillOpen(_ menu: NSMenu) {
     log("AppDelegate: [MENUBAR] Menu opened by user")
@@ -1411,7 +1440,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, @unchecked S
     TranscriptionRetryService.shared.stop()
 
     Task { await ContextWorkstreamReconciler.shared.stop() }
-    Task { await ContextBucketSyncScheduler.shared.stop() }
 
     // Finalize the active Rewind MP4 chunk while the app is still alive.
     // AVAssetWriter files are not readable until finishWriting writes the trailer.

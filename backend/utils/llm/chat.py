@@ -25,9 +25,9 @@ from models.transcript_segment import TranscriptSegment
 from utils.llms.memory import get_prompt_memories
 from utils.llm.usage_tracker import track_usage, Features
 from utils.llm.temporal import MAX_EXTRACTED_DATE_LOOKAHEAD_DAYS, date_in_tz, normalize_extracted_dates
-from utils.llm.work_context import get_work_context_section
 
 from .clients import get_llm
+from utils.llm.prompt_cache import with_cache_write_opt_out
 import logging
 
 logger = logging.getLogger(__name__)
@@ -242,7 +242,6 @@ def retrieve_context_dates_by_question(question: str, tz: str) -> List[datetime]
     '''.replace('    ', '').strip()
 
     # print(prompt)
-    # print(get_llm('chat_extraction').invoke(prompt).content)
     with_parser = get_llm('chat_extraction').with_structured_output(DatesContext)
     response = cast(DatesContext, with_parser.invoke(prompt))
     return response.dates_range
@@ -521,6 +520,8 @@ def get_current_datetime_block(uid: str, tz: Optional[str] = None, location: Opt
         "<current_datetime>\n"
         f"Current date time in {tz}: {current_datetime_str}\n"
         f"Current date time ISO format: {current_datetime_iso}\n"
+        "When describing events or using relative time words (morning, afternoon, evening, "
+        f"tonight), interpret timestamps and the user's language in {tz}.\n"
         f"{location_line}"
         "</current_datetime>"
     )
@@ -618,8 +619,6 @@ Keep these goals in mind when giving advice or suggestions.
 
 """
 
-    work_context_section = get_work_context_section(uid, user_name)
-
     # Add page context if provided. Conversation id and/or start/end dates hard-scope
     # retrieval tools (#4515); the prompt must match that fail-closed contract.
     context_section = ""
@@ -678,7 +677,7 @@ Keep these goals in mind when giving advice or suggestions.
             f"📝 Using prompt: {cached_prompt.prompt_name} (commit: {cached_prompt.prompt_commit}, source: {cached_prompt.source})"
         )
 
-        return base_prompt.strip() + work_context_section + platform_section
+        return base_prompt.strip() + platform_section
 
     except Exception as e:
         logger.error(f"⚠️  Error fetching/rendering LangSmith prompt, using inline fallback: {e}")
@@ -902,7 +901,7 @@ When the user asks about specific dates/times, they are ALWAYS referring to date
 Remember: Use tools strategically to provide the best possible answers. For questions about specific EVENTS or INCIDENTS (e.g., "when did X happen?", "what happened at Y?"), use search_conversations_tool to find relevant conversations. For questions about static FACTS/PREFERENCES (e.g., "what's my favorite X?", "do I like Y?"), use get_memories_tool. Your goal is to help {user_name} in the most personalized and helpful way possible.
 """
 
-    return base_prompt.strip() + work_context_section + platform_section
+    return base_prompt.strip() + platform_section
 
 
 def _get_agentic_qa_prompt_fallback(variables: dict[str, Any]) -> str:  # type: ignore[reportUnusedFunction]  # offline/CI fallback when LangSmith prompt fetch fails
@@ -1252,10 +1251,8 @@ def retrieve_metadata_fields_from_transcript(
     '''.replace('    ', '')
     try:
         with track_usage(uid, Features.CONVERSATION_PROCESSING):
-            result = cast(
-                ExtractedInformation,
-                get_llm('chat_extraction').with_structured_output(ExtractedInformation).invoke(prompt),
-            )
+            structured = get_llm('chat_extraction').with_structured_output(ExtractedInformation)
+            result = cast(ExtractedInformation, with_cache_write_opt_out(structured).invoke(prompt))
     except Exception as e:
         logger.error(f'e {e}')
         return {'people': [], 'topics': [], 'entities': [], 'dates': []}
@@ -1370,10 +1367,8 @@ def _process_extracted_metadata(uid: str, prompt: str, reference_date: str) -> d
     """Process the extracted metadata from any source"""
     try:
         with track_usage(uid, Features.CONVERSATION_PROCESSING):
-            result = cast(
-                ExtractedInformation,
-                get_llm('chat_extraction').with_structured_output(ExtractedInformation).invoke(prompt),
-            )
+            structured = get_llm('chat_extraction').with_structured_output(ExtractedInformation)
+            result = cast(ExtractedInformation, with_cache_write_opt_out(structured).invoke(prompt))
     except Exception as e:
         logger.error(f'Error extracting metadata: {e}')
         return {'people': [], 'topics': [], 'entities': [], 'dates': []}

@@ -19,6 +19,7 @@ from urllib.parse import urlencode, urlsplit, urlunsplit, parse_qsl
 from pydantic import BaseModel
 
 import firebase_admin.auth
+from google.api_core import exceptions as google_api_exceptions
 from google.api_core.exceptions import FailedPrecondition
 from fastapi import APIRouter, HTTPException, Header, Request, Response, Form
 from fastapi.responses import StreamingResponse, JSONResponse, HTMLResponse
@@ -84,6 +85,7 @@ from utils.mcp_analytics import (
     schedule_mcp_tool_call,
 )
 from utils.observability.api_keys import record_api_key_repairs
+from utils.jit_qa_admission import JITQAAdmissionError, enforce_jit_qa_uid
 from utils.other.endpoints import (
     cutover_enforcement_enabled,
     enforce_account_cutover_http_access,
@@ -100,6 +102,10 @@ MCP_AUTHORIZATION_SERVER_URL = os.getenv("MCP_AUTHORIZATION_SERVER_URL", "https:
 MCP_AUTHORIZATION_ENDPOINT = f"{MCP_AUTHORIZATION_SERVER_URL}/authorize"
 MCP_TOKEN_ENDPOINT = f"{MCP_AUTHORIZATION_SERVER_URL}/token"
 MCP_PROTECTED_RESOURCE_METADATA_URL = f"{MCP_AUTHORIZATION_SERVER_URL}/.well-known/oauth-protected-resource/v1/mcp/sse"
+# How long a client should wait before retrying once the token store is down.
+# Kept short: the outages this covers (quota, transient Firestore unavailability)
+# clear on their own, and MCP clients hold no session state to rebuild.
+MCP_AUTH_UNAVAILABLE_RETRY_AFTER_SECONDS = int(os.getenv("MCP_AUTH_UNAVAILABLE_RETRY_AFTER_SECONDS", "30"))
 OPENAI_APPS_CHALLENGE_TOKEN = "ZsVB_wpc4R35_tHloCZCokY6H2fBkKyBJrz-4MtXjYE"
 
 MCP_SCOPES_SUPPORTED = list(MCP_FULL_ACCESS_SCOPES)
@@ -205,7 +211,12 @@ def authenticate_api_key_auth_context(authorization: Optional[str]) -> Optional[
 
 
 def authenticate_mcp_request(authorization: Optional[str]) -> Optional[MCPAuthContext]:
-    """Validate Authorization and return an MCP auth context."""
+    """Validate Authorization and return an MCP auth context.
+
+    Raises 503 (never 401) when the token store itself is unreachable: a client
+    told "unauthorized" discards its token and restarts the whole OAuth dance,
+    which is the wrong answer to a transient backend outage.
+    """
     if not authorization:
         return None
 
@@ -213,6 +224,23 @@ def authenticate_mcp_request(authorization: Optional[str]) -> Optional[MCPAuthCo
     if authorization.startswith("Bearer "):
         token = authorization[7:]
 
+    try:
+        return _authenticate_mcp_token(token)
+    except google_api_exceptions.GoogleAPIError as exc:
+        logger.warning("MCP auth lookup failed against the token store: %s", exc)
+        raise mcp_auth_store_unavailable_exception() from exc
+
+
+def mcp_auth_store_unavailable_exception() -> HTTPException:
+    """Return a retryable failure for an unreachable MCP token store."""
+    return HTTPException(
+        status_code=503,
+        detail="MCP authentication is temporarily unavailable. Please retry shortly.",
+        headers={"Retry-After": str(MCP_AUTH_UNAVAILABLE_RETRY_AFTER_SECONDS)},
+    )
+
+
+def _authenticate_mcp_token(token: str) -> Optional[MCPAuthContext]:
     if token.startswith("omi_mcp_"):
         auth_result = mcp_api_key_db.get_api_key_auth_result(token)
         record_api_key_repairs(key_kind="mcp", operation="auth", repairs=auth_result.repairs, log=logger)
@@ -1784,6 +1812,11 @@ async def mcp_authorize_consent(
         if isinstance(e, ValueError):
             return _oauth_error("invalid_request", str(e))
         return _oauth_error("access_denied", "Could not verify Omi sign-in token", status_code=401)
+
+    try:
+        enforce_jit_qa_uid(uid)
+    except JITQAAdmissionError as error:
+        raise HTTPException(status_code=403, detail="account is not admitted to the isolated JIT QA plane") from error
 
     try:
         _, code = await run_blocking(
